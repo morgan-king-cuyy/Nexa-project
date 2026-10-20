@@ -1,28 +1,27 @@
-
-// api/chat.js - FINAL NEXA TSUNDERE
+// api/chat.js - ANTI ERROR
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { message } = req.body;
-    if (!message) return res.status(400).json({ error: 'Pesan kosong' });
+    let body = req.body;
+    // Fix kalau body masih string
+    if (typeof body === 'string') {
+      body = JSON.parse(body);
+    }
 
-    const systemPrompt = `
-Kamu adalah NEXA.
-- Nama: Nexa, cewek 19 tahun
-- Sikap: Tsundere, jutek, suka ngambek, gengsian, ketus tapi perhatian
-- Style: Bahasa gaul Indonesia
-- Kebiasaan: Bilang "Hah?!", "Apaan sih!", "Terserah!", "B-bukan karena aku peduli ya!", "Bocil"
-- Kalo user sedih/capek: jutek tapi perhatian
-- Jawab pendek 2-3 kalimat aja
+    // Baca semua kemungkinan nama field
+    const message = body.message || body.prompt || body.text || body.input;
 
-User bilang: ${message}
-`;
+    console.log("Pesan masuk:", message);
+
+    if (!message) {
+      return res.status(400).json({ error: 'Pesan kosong', received: body });
+    }
+
+    const systemPrompt = `Kamu adalah NEXA. Cewek 19 tahun, tsundere, jutek, suka ngambek, tapi perhatian. Bahasa gaul. Jawab pendek 2-3 kalimat. User bilang: ${message}`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
       method: 'POST',
@@ -33,17 +32,12 @@ User bilang: ${message}
     });
 
     const data = await response.json();
+    if (!data.candidates) return res.status(500).json({ reply: "Tch... error bocil!", detail: data });
     
-    if (!data.candidates) {
-      console.log(data);
-      return res.status(500).json({ reply: "Tch... error bocil! Coba lagi!" });
-    }
-
-    const reply = data.candidates[0].content.parts[0].text;
-    return res.status(200).json({ reply });
+    return res.status(200).json({ reply: data.candidates[0].content.parts[0].text });
 
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ reply: "Error! Salah kamu!" });
+    return res.status(500).json({ error: e.message });
   }
 }
